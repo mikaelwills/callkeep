@@ -15,6 +15,7 @@
     NSOperatingSystemVersion _version;
     bool _hasListeners;
     NSMutableArray *_delayedEvents;
+    NSMutableArray *_callQueue; 
 }
 
 - (FlutterMethodChannel *)eventChannel
@@ -38,6 +39,7 @@ static NSObject<CallKeepPushDelegate>* _delegate;
 #endif
     if (self = [super init]) {
         _delayedEvents = [NSMutableArray array];
+        _callQueue = [NSMutableArray array]; 
     }
     return self;
 }
@@ -230,6 +232,14 @@ static NSObject<CallKeepPushDelegate>* _delegate;
      "has_video": false,
      }
      */
+
+     UIApplicationState state = [UIApplication sharedApplication].applicationState;
+    if (state == UIApplicationStateBackground || state == UIApplicationStateInactive) {
+        NSLog(@"App is in the background or not active");
+    } else if (state == UIApplicationStateActive) {
+        NSLog(@"App is active in the foreground not reporting new call");
+        return;
+    }
     
     NSDictionary *dic = payload.dictionaryPayload;
     
@@ -266,6 +276,11 @@ static NSObject<CallKeepPushDelegate>* _delegate;
                         fromPushKit:YES
                             payload:dic
               withCompletionHandler:completion];
+
+    if (_callQueue == nil) {
+        _callQueue = [NSMutableArray array];
+    }
+    [_callQueue addObject:@"Call Reported"];
 }
 
 - (void)pushRegistry:(PKPushRegistry *)registry didReceiveIncomingPushWithPayload:(PKPushPayload *)payload forType:(NSString *)type {
@@ -302,6 +317,12 @@ static NSObject<CallKeepPushDelegate>* _delegate;
                  callerName:(NSString * _Nullable)callerName
                     payload:(NSDictionary * _Nullable)payload
 {
+   if ([_callQueue count] > 0) {
+      NSLog(@"Returning early not reporting, removing at index 0 call queue length: %lu", (unsigned long)_callQueue.count);
+       [_callQueue removeObjectAtIndex:0];
+     
+       return;
+   }
     [CallKeep reportNewIncomingCall: uuidString handle:handle handleType:handleType hasVideo:hasVideo callerName:callerName fromPushKit: NO payload:payload withCompletionHandler:nil];
 }
 
